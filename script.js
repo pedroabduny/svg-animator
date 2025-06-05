@@ -95,7 +95,7 @@ class SVGAnimator {
         // Animation controls
         document.getElementById('playBtn').addEventListener('click', () => this.playAnimation());
         document.getElementById('resetBtn').addEventListener('click', () => this.resetAnimation());
-        document.getElementById('exportBtn').addEventListener('click', () => this.exportToGIF());
+        document.getElementById('exportBtn').addEventListener('click', () => this.exportToAnimation());
         document.getElementById('exportCSSBtn').addEventListener('click', () => this.exportToCSS());
         document.getElementById('themeToggleBtn').addEventListener('click', () => this.toggleTheme());
     }
@@ -660,94 +660,79 @@ class SVGAnimator {
         this.isAnimating = false;
     }
 
-    async exportToGIF() {
+    async exportToAnimation() {
         if (!this.animatedSVG) return;
         
         const loadingOverlay = document.getElementById('loadingOverlay');
         loadingOverlay.style.display = 'flex';
         
         try {
-            // Use simplified approach - always try gif.js first, with timeout
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Timeout')), 10000); // 10 second timeout
-            });
-            
-            const gifPromise = this.createGIFWithTimeout();
-            
-            await Promise.race([gifPromise, timeoutPromise]);
-            
-        } catch (error) {
-            console.error('Error exporting GIF:', error);
+            await this.createAnimatedHTML();
             loadingOverlay.style.display = 'none';
             
-            // Always fallback to frame export if GIF fails
-            showToast('GIF generation failed or timed out. Exporting frames instead...', 'error');
+        } catch (error) {
+            console.error('Error exporting animation:', error);
+            loadingOverlay.style.display = 'none';
+            
+            // Fallback to frame export if animation fails
+            showToast('Animation export failed. Exporting frames instead...', 'error');
             setTimeout(() => this.exportFramesAsImages(), 1000);
         }
     }
 
-    async createGIFWithTimeout() {
-        return new Promise(async (resolve, reject) => {
-            try {
-                // Create canvas for rendering
-                const canvas = document.createElement('canvas');
-                canvas.width = 800;
-                canvas.height = 600;
-                const ctx = canvas.getContext('2d');
-                
-                // Calculate frame count and duration (reduced for faster processing)
-                const fps = 8; // Lower FPS for better performance
-                const totalDuration = this.animationSettings.duration + this.animationSettings.delay + 0.5;
-                const frameCount = Math.min(Math.ceil(totalDuration * fps), 40); // Max 40 frames
-                
-                // Create frames array for APNG (Animated PNG)
-                const frames = [];
-                
-                // Create frames with progress indicator
-                for (let frame = 0; frame < frameCount; frame++) {
-                    const progress = frame / frameCount;
-                    const currentTime = progress * totalDuration;
-                    
-                    // Update loading text
-                    const loadingText = document.querySelector('.loading-content p');
-                    if (loadingText) {
-                        loadingText.textContent = `Generating frame ${frame + 1} of ${frameCount}...`;
-                    }
-                    
-                    // Clear canvas with appropriate background
-                    ctx.fillStyle = this.isDarkMode ? '#1f2937' : 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Create SVG with current animation state
-                    const svgData = this.createFrameSVG(currentTime);
-                    
-                    // Convert SVG to image and draw on canvas
-                    await this.drawSVGOnCanvas(svgData, canvas, ctx);
-                    
-                    // Store frame as data URL
-                    frames.push(canvas.toDataURL('image/png'));
-                    
-                    // Allow UI updates
-                    await new Promise(resolve => setTimeout(resolve, 10));
-                }
-                
-                // Update loading text
-                const loadingText = document.querySelector('.loading-content p');
-                if (loadingText) {
-                    loadingText.textContent = 'Creating animated image...';
-                }
-                
-                // Create APNG (Animated PNG) using a simple approach
-                await this.createAnimatedImage(frames, fps);
-                
-                document.getElementById('loadingOverlay').style.display = 'none';
-                showToast('Animation exported successfully!', 'success');
-                resolve();
-                
-            } catch (error) {
-                reject(error);
+    async createAnimatedHTML() {
+        // Create canvas for rendering
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 600;
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate frame count and duration (reduced for faster processing)
+        const fps = 8; // Lower FPS for better performance
+        const totalDuration = this.animationSettings.duration + this.animationSettings.delay + 0.5;
+        const frameCount = Math.min(Math.ceil(totalDuration * fps), 40); // Max 40 frames
+        
+        // Create frames array
+        const frames = [];
+        
+        // Create frames with progress indicator
+        for (let frame = 0; frame < frameCount; frame++) {
+            const progress = frame / frameCount;
+            const currentTime = progress * totalDuration;
+            
+            // Update loading text
+            const loadingText = document.querySelector('.loading-content p');
+            if (loadingText) {
+                loadingText.textContent = `Generating frame ${frame + 1} of ${frameCount}...`;
             }
-        });
+            
+            // Clear canvas with appropriate background
+            ctx.fillStyle = this.isDarkMode ? '#1f2937' : 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Create SVG with current animation state
+            const svgData = this.createFrameSVG(currentTime);
+            
+            // Convert SVG to image and draw on canvas
+            await this.drawSVGOnCanvas(svgData, canvas, ctx);
+            
+            // Store frame as data URL
+            frames.push(canvas.toDataURL('image/png'));
+            
+            // Allow UI updates
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        
+        // Update loading text
+        const loadingText = document.querySelector('.loading-content p');
+        if (loadingText) {
+            loadingText.textContent = 'Creating animated HTML...';
+        }
+        
+        // Create animated HTML file
+        await this.createAnimatedImage(frames, fps);
+        
+        showToast('Animation exported successfully!', 'success');
     }
 
     async createAnimatedImage(frames, fps) {
