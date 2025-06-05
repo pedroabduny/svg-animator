@@ -663,82 +663,128 @@ class SVGAnimator {
     async exportToGIF() {
         if (!this.animatedSVG) return;
         
-        // Check if we're running locally (file://) and show alternative
-        if (window.location.protocol === 'file:') {
-            this.exportFramesAsImages();
-            return;
-        }
-        
         const loadingOverlay = document.getElementById('loadingOverlay');
         loadingOverlay.style.display = 'flex';
         
         try {
-            // Try to create GIF using gif.js with local worker fallback
-            const gif = new GIF({
-                workers: 1,
-                quality: 10,
-                width: 800,
-                height: 600,
-                workerScript: 'data:application/javascript;base64,' + btoa(this.getWorkerScript())
+            // Use simplified approach - always try gif.js first, with timeout
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Timeout')), 10000); // 10 second timeout
             });
-
-            // Create canvas for rendering
-            const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 600;
-            const ctx = canvas.getContext('2d');
             
-            // Calculate frame count and duration
-            const fps = 15; // Reduced FPS for better performance
-            const totalDuration = this.animationSettings.duration + this.animationSettings.delay + 0.5;
-            const frameCount = Math.ceil(totalDuration * fps);
-            const frameDelay = 1000 / fps;
+            const gifPromise = this.createGIFWithTimeout();
             
-            // Create frames
-            for (let frame = 0; frame < frameCount; frame++) {
-                const progress = frame / frameCount;
-                const currentTime = progress * totalDuration;
-                
-                // Clear canvas with appropriate background
-                ctx.fillStyle = this.isDarkMode ? '#1f2937' : 'white';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Create SVG with current animation state
-                const svgData = this.createFrameSVG(currentTime);
-                
-                // Convert SVG to image and draw on canvas
-                await this.drawSVGOnCanvas(svgData, canvas, ctx);
-                
-                // Add frame to GIF
-                gif.addFrame(canvas, { delay: frameDelay });
-            }
-            
-            // Render GIF
-            gif.render();
-            
-            gif.on('finished', (blob) => {
-                // Download the GIF
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'svg-animation.gif';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                loadingOverlay.style.display = 'none';
-                showToast('GIF exported successfully!', 'success');
-            });
+            await Promise.race([gifPromise, timeoutPromise]);
             
         } catch (error) {
             console.error('Error exporting GIF:', error);
             loadingOverlay.style.display = 'none';
             
-            // Fallback to frame export
-            showToast('GIF export failed. Exporting frames instead...', 'error');
+            // Always fallback to frame export if GIF fails
+            showToast('GIF generation failed or timed out. Exporting frames instead...', 'error');
             setTimeout(() => this.exportFramesAsImages(), 1000);
         }
+    }
+
+    async createGIFWithTimeout() {
+        return new Promise(async (resolve, reject) => {
+            try {
+                // Try to use gif.js with CDN worker (only works on web servers)
+                let gif;
+                
+                if (window.location.protocol !== 'file:') {
+                    try {
+                        gif = new GIF({
+                            workers: 2,
+                            quality: 10,
+                            width: 800,
+                            height: 600,
+                            workerScript: 'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'
+                        });
+                    } catch (e) {
+                        throw new Error('GIF.js failed to initialize');
+                    }
+                } else {
+                    throw new Error('Local file detected');
+                }
+
+                // Create canvas for rendering
+                const canvas = document.createElement('canvas');
+                canvas.width = 800;
+                canvas.height = 600;
+                const ctx = canvas.getContext('2d');
+                
+                // Calculate frame count and duration (reduced for faster processing)
+                const fps = 10; // Lower FPS for faster generation
+                const totalDuration = this.animationSettings.duration + this.animationSettings.delay + 0.5;
+                const frameCount = Math.min(Math.ceil(totalDuration * fps), 50); // Max 50 frames
+                const frameDelay = 1000 / fps;
+                
+                // Create frames with progress indicator
+                for (let frame = 0; frame < frameCount; frame++) {
+                    const progress = frame / frameCount;
+                    const currentTime = progress * totalDuration;
+                    
+                    // Update loading text
+                    const loadingText = document.querySelector('.loading-content p');
+                    if (loadingText) {
+                        loadingText.textContent = `Generating frame ${frame + 1} of ${frameCount}...`;
+                    }
+                    
+                    // Clear canvas with appropriate background
+                    ctx.fillStyle = this.isDarkMode ? '#1f2937' : 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Create SVG with current animation state
+                    const svgData = this.createFrameSVG(currentTime);
+                    
+                    // Convert SVG to image and draw on canvas
+                    await this.drawSVGOnCanvas(svgData, canvas, ctx);
+                    
+                    // Add frame to GIF
+                    gif.addFrame(canvas, { delay: frameDelay });
+                    
+                    // Allow UI updates
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
+                // Update loading text
+                const loadingText = document.querySelector('.loading-content p');
+                if (loadingText) {
+                    loadingText.textContent = 'Finalizing GIF...';
+                }
+                
+                // Set up event handlers
+                gif.on('finished', (blob) => {
+                    // Download the GIF
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'svg-animation.gif';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    showToast('GIF exported successfully!', 'success');
+                    resolve();
+                });
+                
+                gif.on('progress', (p) => {
+                    const loadingText = document.querySelector('.loading-content p');
+                    if (loadingText) {
+                        loadingText.textContent = `Processing GIF... ${Math.round(p * 100)}%`;
+                    }
+                });
+                
+                // Start rendering
+                gif.render();
+                
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 
     async exportFramesAsImages() {
@@ -799,25 +845,7 @@ class SVGAnimator {
         }
     }
 
-    getWorkerScript() {
-        // Minimal worker script for gif.js
-        return `
-            var GIFEncoder = function() {
-                // Simplified GIF encoder for local use
-                this.encode = function(frames) {
-                    // Basic GIF creation logic would go here
-                    return new Uint8Array();
-                };
-            };
-            
-            onmessage = function(e) {
-                var data = e.data;
-                if (data.type === 'start') {
-                    postMessage({type: 'finished', data: new Uint8Array()});
-                }
-            };
-        `;
-    }
+
 
     exportToCSS() {
         if (!this.animatedSVG) return;
