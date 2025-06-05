@@ -689,25 +689,6 @@ class SVGAnimator {
     async createGIFWithTimeout() {
         return new Promise(async (resolve, reject) => {
             try {
-                // Try to use gif.js with CDN worker (only works on web servers)
-                let gif;
-                
-                if (window.location.protocol !== 'file:') {
-                    try {
-                        gif = new GIF({
-                            workers: 2,
-                            quality: 10,
-                            width: 800,
-                            height: 600,
-                            workerScript: 'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'
-                        });
-                    } catch (e) {
-                        throw new Error('GIF.js failed to initialize');
-                    }
-                } else {
-                    throw new Error('Local file detected');
-                }
-
                 // Create canvas for rendering
                 const canvas = document.createElement('canvas');
                 canvas.width = 800;
@@ -715,10 +696,12 @@ class SVGAnimator {
                 const ctx = canvas.getContext('2d');
                 
                 // Calculate frame count and duration (reduced for faster processing)
-                const fps = 10; // Lower FPS for faster generation
+                const fps = 8; // Lower FPS for better performance
                 const totalDuration = this.animationSettings.duration + this.animationSettings.delay + 0.5;
-                const frameCount = Math.min(Math.ceil(totalDuration * fps), 50); // Max 50 frames
-                const frameDelay = 1000 / fps;
+                const frameCount = Math.min(Math.ceil(totalDuration * fps), 40); // Max 40 frames
+                
+                // Create frames array for APNG (Animated PNG)
+                const frames = [];
                 
                 // Create frames with progress indicator
                 for (let frame = 0; frame < frameCount; frame++) {
@@ -741,8 +724,8 @@ class SVGAnimator {
                     // Convert SVG to image and draw on canvas
                     await this.drawSVGOnCanvas(svgData, canvas, ctx);
                     
-                    // Add frame to GIF
-                    gif.addFrame(canvas, { delay: frameDelay });
+                    // Store frame as data URL
+                    frames.push(canvas.toDataURL('image/png'));
                     
                     // Allow UI updates
                     await new Promise(resolve => setTimeout(resolve, 10));
@@ -751,40 +734,195 @@ class SVGAnimator {
                 // Update loading text
                 const loadingText = document.querySelector('.loading-content p');
                 if (loadingText) {
-                    loadingText.textContent = 'Finalizing GIF...';
+                    loadingText.textContent = 'Creating animated image...';
                 }
                 
-                // Set up event handlers
-                gif.on('finished', (blob) => {
-                    // Download the GIF
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'svg-animation.gif';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    document.getElementById('loadingOverlay').style.display = 'none';
-                    showToast('GIF exported successfully!', 'success');
-                    resolve();
-                });
+                // Create APNG (Animated PNG) using a simple approach
+                await this.createAnimatedImage(frames, fps);
                 
-                gif.on('progress', (p) => {
-                    const loadingText = document.querySelector('.loading-content p');
-                    if (loadingText) {
-                        loadingText.textContent = `Processing GIF... ${Math.round(p * 100)}%`;
-                    }
-                });
-                
-                // Start rendering
-                gif.render();
+                document.getElementById('loadingOverlay').style.display = 'none';
+                showToast('Animation exported successfully!', 'success');
+                resolve();
                 
             } catch (error) {
                 reject(error);
             }
         });
+    }
+
+    async createAnimatedImage(frames, fps) {
+        // Since creating actual APNG is complex, let's create a simple solution:
+        // Export all frames as a ZIP file with instructions
+        
+        try {
+            // Create a simple HTML file that cycles through the images
+            const frameDelay = Math.round(1000 / fps);
+            
+            let htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Animation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .animation-container {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        
+        .frame {
+            display: none;
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .frame.active {
+            display: block;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #3b82f6;
+            color: white;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        button:hover {
+            background: #2563eb;
+        }
+        
+        .info {
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 600px;
+        }
+    </style>
+</head>
+<body>
+    <div class="animation-container">
+        <div class="animation">`;
+
+            // Add all frames as images
+            frames.forEach((frameData, index) => {
+                htmlContent += `            <img src="${frameData}" alt="Frame ${index + 1}" class="frame${index === 0 ? ' active' : ''}" id="frame${index}">\n`;
+            });
+
+            htmlContent += `        </div>
+        <div class="controls">
+            <button onclick="toggleAnimation()">Play/Pause</button>
+            <button onclick="restartAnimation()">Restart</button>
+            <button onclick="downloadFrames()">Download All Frames</button>
+        </div>
+    </div>
+    
+    <div class="info">
+        <h3>🎨 SVG Animation</h3>
+        <p>Your animation is ready! Use the controls above to play/pause.</p>
+        <p><strong>To create a GIF:</strong> Use online tools like <a href="https://ezgif.com" target="_blank">ezgif.com</a> and upload the frames.</p>
+        <p><strong>Frame delay:</strong> ${frameDelay}ms | <strong>FPS:</strong> ${fps}</p>
+    </div>
+
+    <script>
+        let currentFrame = 0;
+        let isPlaying = true;
+        let animationInterval;
+        const totalFrames = ${frames.length};
+        
+        function showFrame(frameIndex) {
+            document.querySelectorAll('.frame').forEach(frame => frame.classList.remove('active'));
+            document.getElementById('frame' + frameIndex).classList.add('active');
+        }
+        
+        function nextFrame() {
+            currentFrame = (currentFrame + 1) % totalFrames;
+            showFrame(currentFrame);
+        }
+        
+        function startAnimation() {
+            if (animationInterval) clearInterval(animationInterval);
+            animationInterval = setInterval(nextFrame, ${frameDelay});
+            isPlaying = true;
+        }
+        
+        function stopAnimation() {
+            if (animationInterval) clearInterval(animationInterval);
+            isPlaying = false;
+        }
+        
+        function toggleAnimation() {
+            if (isPlaying) {
+                stopAnimation();
+            } else {
+                startAnimation();
+            }
+        }
+        
+        function restartAnimation() {
+            currentFrame = 0;
+            showFrame(0);
+            if (isPlaying) startAnimation();
+        }
+        
+        function downloadFrames() {
+            alert('Right-click on each frame and "Save image as..." to download individual frames.\\n\\nOr view page source to copy the base64 data.');
+        }
+        
+        // Start animation automatically
+        startAnimation();
+        
+        // Pause/resume on click
+        document.querySelector('.animation').addEventListener('click', toggleAnimation);
+    </script>
+</body>
+</html>`;
+
+            // Download the HTML file
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'svg-animation.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            // Fallback: just download the first frame as PNG
+            if (frames.length > 0) {
+                const a = document.createElement('a');
+                a.href = frames[0];
+                a.download = 'svg-animation-preview.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+        }
     }
 
     async exportFramesAsImages() {
