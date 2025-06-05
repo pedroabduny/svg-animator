@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Animator - Stroke Animation Tool</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7v10c0 5.55 3.84 10 9 9s9-4.46 9-9V7l-10-5z"/>
+                    <path d="M8 11l2 2 4-4"/>
+                </svg>
+                SVG Animator
+            </h1>
+            <p class="subtitle">Create beautiful stroke animations from your SVG files</p>
+        </header>
+
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="upload-container" id="uploadContainer">
+                    <div class="upload-content">
+                        <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7,10 12,15 17,10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <h3>Upload SVG File</h3>
+                        <p>Drag and drop your SVG file here, or click to browse</p>
+                        <input type="file" id="svgInput" accept=".svg" hidden>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Animation Controls -->
+            <section class="controls-section" id="controlsSection" style="display: none;">
+                <div class="controls-grid">
+                    <div class="control-group">
+                        <label for="animationDuration">Duration (seconds)</label>
+                        <input type="range" id="animationDuration" min="0.5" max="5" step="0.1" value="2">
+                        <span class="range-value" id="durationValue">2.0s</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="animationDelay">Delay (seconds)</label>
+                        <input type="range" id="animationDelay" min="0" max="2" step="0.1" value="0">
+                        <span class="range-value" id="delayValue">0.0s</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="strokeWidth">Stroke Width</label>
+                        <input type="range" id="strokeWidth" min="1" max="10" step="0.5" value="2">
+                        <span class="range-value" id="strokeWidthValue">2px</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="strokeColor">Stroke Color</label>
+                        <input type="color" id="strokeColor" value="#3b82f6">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="strokeLinecap">Stroke Ends</label>
+                        <select id="strokeLinecap">
+                            <option value="round">Round</option>
+                            <option value="square">Square</option>
+                            <option value="butt">Flat</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="animationStyle">Animation Style</label>
+                        <select id="animationStyle">
+                            <option value="simultaneous">Single Stroke (Simultaneous)</option>
+                            <option value="sequential">Multiple Strokes (Sequential)</option>
+                            <option value="continuous">Continuous Path (Single Line)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="animationType">Animation Type</label>
+                        <select id="animationType">
+                            <option value="stroke">Stroke Draw</option>
+                            <option value="typewriter">Typewriter</option>
+                            <option value="fade">Fade In</option>
+                            <option value="scale">Scale (Burst)</option>
+                            <option value="slide">Slide In</option>
+                            <option value="bounce">Bounce</option>
+                            <option value="rotate">Roll</option>
+                            <option value="spread">Spread</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="animation-controls">
+                    <button class="btn btn-primary" id="playBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5,3 19,12 5,21"/>
+                        </svg>
+                        Play Animation
+                    </button>
+                    <button class="btn btn-secondary" id="resetBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="1,4 1,10 7,10"/>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                        </svg>
+                        Reset
+                    </button>
+                </div>
+            </section>
+
+            <!-- Preview Section -->
+            <section class="preview-section" id="previewSection" style="display: none;">
+                <div class="preview-container">
+                    <div class="preview-header">
+                        <h3>Animation Preview</h3>
+                        <div class="preview-controls">
+                            <button class="btn btn-icon" id="themeToggleBtn" title="Toggle light/dark preview">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sun-icon">
+                                    <circle cx="12" cy="12" r="5"/>
+                                    <line x1="12" y1="1" x2="12" y2="3"/>
+                                    <line x1="12" y1="21" x2="12" y2="23"/>
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                    <line x1="1" y1="12" x2="3" y2="12"/>
+                                    <line x1="21" y1="12" x2="23" y2="12"/>
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                </svg>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="moon-icon" style="display: none;">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                                </svg>
+                            </button>
+                            <button class="btn btn-success" id="exportBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17,8 12,3 7,8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                Export GIF
+                            </button>
+                            <button class="btn btn-primary" id="exportCSSBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="16,18 22,12 16,6"/>
+                                    <polyline points="8,6 2,12 8,18"/>
+                                </svg>
+                                Export CSS
+                            </button>
+                        </div>
+                    </div>
+                    <div class="svg-preview" id="svgPreview"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>Generating GIF...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+    <script src="script.js"></script>
+</body>
+</html> 
